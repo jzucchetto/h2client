@@ -16,5 +16,5 @@ client.on('reconnect', () => console.log('[HTTP2]', 'reconnecting...'));
 ```
 
 ## Demo
-![demo](https://github.com/jzucchetto/h2client/main/img/demo.gif)
+![demo](https://github.com/jzucchetto/h2client/raw/main/img/demo.gif)
 
