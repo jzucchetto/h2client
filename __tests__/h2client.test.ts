@@ -1,47 +1,64 @@
-import { createServer, ClientHttp2Session } from 'http2';
-import h2client from '../src/h2client';
+import {describe, expect, it, jest} from '@jest/globals'
+import { ClientHttp2Session, createServer, ServerHttp2Stream } from 'http2';
+import { Socket } from 'net';
+import { connect } from '../src/h2client';
 
-describe('h2client', () => {
-    it('should connect', async () => {
-        const server = createServer();
-        server.listen(8005);
-        const client = await h2client('http://localhost:8005', { autoReconnect: false });
-        expect(client.closed).toBe(false);
-        server.close();
-        await client.close();
-    });
+jest.setTimeout(30000);
+
+describe('h2Client', () => {
 
     it('should reconnect', async () => {
+        const fn = jest.fn();
+        const client = connect('http://localhost:1111', { reconnect: true });
+        client.on('reconnect', fn);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        expect(fn).toBeCalled();
+        client.destroy();
+    });
+    it('should not reconnect', async () => {
+        const fn = jest.fn();
+        const client = connect('http://localhost:1111', { reconnect: false });
+        client.on('reconnect', fn);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        expect(fn).not.toBeCalled();
+        client.destroy();
+    });
+    
+    it('request should wait for connect', async () => {
         const server = createServer();
-        return await new Promise<void>(resolve => {
-            const client = h2client('http://localhost:8003', { autoReconnect: true, onReconnect: () => {
-                    server.listen(8003);
-                }, onConnect: () => {
-                    server.close();
-                    client.then(c => c.close());
-                    resolve();
-                }
-            });
+        var socket: Socket = null;
+        server.on('connection', (_socket) => {
+            socket = _socket;
         });
+        const client = connect('http://localhost:1111');
+        const fn = jest.fn();
+        await new Promise<void>(async resolve => {
+            client.request({ ':method': 'GET' }).then(() => {
+                fn();
+                resolve();
+            });
+            expect(fn).not.toBeCalled();
+            server.listen(1111);
+        });
+        expect(fn).toBeCalled();
+        client.close();
+        socket.end();
+        server.close();
     });
 
-    it('dispatches onDisconnect', async () => {
-        const fn = jest.fn();
+    it('should emit disconnect', async () => {
         const server = createServer();
-        server.listen(8006);
-        const client = await h2client('http://localhost:8006', { autoReconnect: false, onDisconnect: fn });
-        client.close();
-        await new Promise(resolve => { server.close(resolve); });
-        expect(fn).toHaveBeenCalled();
-    });
-
-    it('dispatches onConnect', async () => {
-        const fn = jest.fn();
-        const server = createServer();
-        server.listen(8006);
-        const client = await h2client('http://localhost:8006', { autoReconnect: false, onConnect: fn });
-        client.close();
-        await new Promise(resolve => { server.close(resolve); });
-        expect(fn).toHaveBeenCalled();
+        server.listen(1112);
+        var socket: Socket = null;
+        server.on('connection', (_socket) => {
+            socket = _socket;
+        });
+        const client = await new Promise<ClientHttp2Session>(resolve => connect('http://localhost:1112', { reconnect: true }, resolve));
+        const result = await new Promise<boolean>(async resolve => {
+            client.on('disconnect', () => resolve(true))
+            socket.end();
+            server.close();
+        });
+        expect(result).toBe(true);
     });
 });

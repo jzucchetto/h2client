@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "description": "A lightweight http2 (h2) client with automatic reconnection.",
   "main": "dist/h2client.js",
+  "types": "dist/h2client.d.ts",
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc-watch",
